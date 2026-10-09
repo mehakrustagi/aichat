@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { TITLE_GRADIENT, type TitleTone } from "@/lib/gradients";
+import { BLUR_PEAK, EASE_IN, EASE_OUT } from "@/lib/motionTokens";
 
 /**
  * The headline, rendered as a drum. From the Motion Library's
@@ -24,11 +25,17 @@ import { TITLE_GRADIENT, type TitleTone } from "@/lib/gradients";
 
 /** How far behind the text the axis sits. Larger = wider, looser arc. */
 const RADIUS = 15;
-/** Just shy of 90°, where a face is edge-on and can flicker to a hairline. */
-const ANGLE = 88;
+/** Shallower than the original's 88°, which put a face edge-on and made the
+ *  turn read as a flip. Softened to match the onboarding prototype, where
+ *  copy arrives rather than snaps. */
+const ANGLE = 44;
 
-/** Shared by both faces, so they stay two halves of one rotation. */
-const SWING = { type: "spring", stiffness: 250, damping: 26, mass: 0.9 } as const;
+/** Out of focus and into it, on the prototype's decelerating ease. Opacity on
+ *  its own reads as a switch; the blur is what makes it read as a line
+ *  settling. Duration over spring for the same reason — a spring has a
+ *  character, and this wants none. */
+const IN = { duration: 0.8, ease: EASE_OUT } as const;
+const OUT = { duration: 0.48, ease: EASE_IN } as const;
 
 export function RollingTitle({
   title,
@@ -79,13 +86,10 @@ export function RollingTitle({
                 align === "center" ? "left-0 right-0 justify-center" : "left-0 justify-start"
               }`}
               style={{ transformOrigin: `50% 50% -${RADIUS}px` }}
-              initial={{ rotateX: ANGLE, opacity: 0 }}
-              animate={{ rotateX: 0, opacity: 1 }}
-              exit={{ rotateX: -ANGLE, opacity: 0 }}
-              // Opacity resolves faster than the swing so a face is solid for
-              // most of its travel — fading across the whole arc would turn
-              // the rotation back into a crossfade.
-              transition={{ ...SWING, opacity: { duration: 0.26 } }}
+              initial={{ rotateX: ANGLE, opacity: 0, filter: `blur(${BLUR_PEAK}px)` }}
+              animate={{ rotateX: 0, opacity: 1, filter: "blur(0px)" }}
+              exit={{ rotateX: -ANGLE, opacity: 0, filter: `blur(${BLUR_PEAK}px)`, transition: OUT }}
+              transition={IN}
             >
               {children ?? (
                 <span

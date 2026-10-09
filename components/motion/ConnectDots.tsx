@@ -14,9 +14,9 @@ import { motion } from "motion/react";
 const DOTS = [6, 10, 16, 10, 6];
 const GAP = 8;
 /** One pass end to end. Slow enough to read as a handshake, not a spinner. */
-const SWEEP_S = 1.5;
+const SWEEP_S = 2.1;
 /** Dead air before it sets off again, so passes read as separate. */
-const REST_S = 0.45;
+const REST_S = 0.6;
 
 export function ConnectDots({ className = "" }: { className?: string }) {
   return (

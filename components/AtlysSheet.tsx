@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "motion/react";
+import { motion, useSpring } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { LiquidPill } from "@/components/motion/LiquidPill";
 import { StepIcon, STEP_TEXT_GRADIENT } from "@/components/motion/StepIcon";
@@ -21,6 +21,9 @@ export const ATLYS_SHEET_HEIGHT = 680;
 const FAILED_HEIGHT = 400;
 /** Steps start at y350 and a row is 26 tall on an 18 gap, so one row clears
  *  at 376 and two at 420. The frame below each gets room, not an average. */
+/** Stages with nothing under the copy bring the sheet down to meet them,
+ *  rather than leaving two thirds of it empty under a single line. */
+const CONNECTED_HEIGHT = 430;
 const CARD_TOP_ONE_ROW = 410;
 const CARD_TOP_TWO_ROWS = 456;
 
@@ -34,10 +37,10 @@ const CARD_TOP_TWO_ROWS = 456;
 type Stage = "connecting" | "profile" | "confirm" | "connected" | "failed";
 
 /** ms each self-advancing stage holds before the next */
-const HOLD = { connecting: 2200, profile: 2200, connected: 1900 } as const;
+const HOLD = { connecting: 3600, profile: 3600, connected: 2600 } as const;
 /** When the first step stops searching and lands, partway through stage one —
  *  the node draws it already green with the visas underneath it. */
-const FIRST_DONE_MS = 1250;
+const FIRST_DONE_MS = 1900;
 
 /** The stamp's box, and how wide its printed mount is. A narrow mount makes
  *  the art look trimmed to the edge; this is what puts the perforations a
@@ -168,7 +171,20 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
   const working = stage === "connecting" || stage === "profile";
   const connected = stage === "connected";
   const failed = stage === "failed";
-  const sheetHeight = failed ? FAILED_HEIGHT : ATLYS_SHEET_HEIGHT;
+  /* A CSS transition cannot do this: `motion` owns this element's style, so
+     the height was being written straight through and snapping while
+     everything around it eased — which is what made one sheet resizing read
+     as a different sheet arriving. A spring on the value settles it with the
+     same character as the sheet's own entrance. */
+  const sheetHeight = failed
+    ? FAILED_HEIGHT
+    : connected
+      ? CONNECTED_HEIGHT
+      : ATLYS_SHEET_HEIGHT;
+  const height = useSpring(sheetHeight, { stiffness: 230, damping: 32, mass: 0.9 });
+  useEffect(() => {
+    height.set(sheetHeight);
+  }, [height, sheetHeight]);
   /** How many rows are on screen, and the index of the last completed one. */
   const rows = stage === "connecting" ? 1 : 2;
   const done = stage === "connecting" ? (firstDone ? 0 : -1) : 0;
@@ -177,7 +193,7 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
     <motion.div
       className="absolute bottom-0 left-0 w-[440px] overflow-hidden rounded-t-[44px] bg-white shadow-[0_-8px_40px_-12px_rgba(0,0,0,0.12)]"
       animate={open ? "visible" : "hidden"}
-      style={{ height: sheetHeight, transformPerspective: 1400 }}
+      style={{ height, transformPerspective: 1400 }}
       variants={sheetVariants}
       custom={sheetHeight + 40}
       initial="hidden"
@@ -314,9 +330,11 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
           className="transition-opacity duration-300"
           style={{ opacity: working ? 1 : 0, pointerEvents: working ? "auto" : "none" }}
         >
-        {/* A step appears when it starts, not before: the node shows one row
-            under "Connecting", two under "Collecting". Rendering all of them
-            greyed put the second row under the card. */}
+        {/* A step appears when it starts, so the finished one sits above the
+            working one rather than being scrolled away — that is what the
+            node draws. The lift is the drum: completing re-keys the line, so
+            it rolls up and out and comes back in its finished colours while
+            the next row arrives underneath. */}
         <LoaderCore
           loadingStates={STEP_LABELS.slice(0, rows).map((label, i) => ({
             text: stepText(label, i <= done),
@@ -346,9 +364,12 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
         </div>
         {/* stage one shows the visas themselves; stage two is still loading */}
         <div
-          className="absolute bottom-0 left-0 flex w-full items-end justify-center gap-[6px] px-[16px] pb-[8px] transition-opacity duration-500"
+          // Centred in the card, and overlapping — the node fans them so each
+          // one sits partly over the next, which is what makes it read as a
+          // handful of stamps rather than a row of them.
+          className="absolute inset-0 flex items-center justify-center px-[16px] pt-[14px] transition-opacity duration-500"
         >
-          {POSTCARDS.map((c) => (
+          {POSTCARDS.map((c, i) => (
             /* Two elements, and the split matters: `filter` is applied BEFORE
                `mask`, so a drop-shadow on the masked element is a shadow of
                the un-masked square. The wrapper carries the shadow and sees
@@ -358,7 +379,7 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
             <div
               key={c.src}
               className="shrink-0 [filter:drop-shadow(0_0.5px_0.6px_rgba(0,0,0,0.3))_drop-shadow(0_4px_9px_rgba(0,0,0,0.12))]"
-              style={{ transform: `rotate(${c.rotate}deg)` }}
+              style={{ transform: `rotate(${c.rotate}deg)`, marginLeft: i === 0 ? 0 : -7 }}
             >
               <div style={{ width: STAMP_W, height: STAMP_H, background: "#fff", ...STAMP_MASK }}>
                 <Image

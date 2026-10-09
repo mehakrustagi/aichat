@@ -118,20 +118,38 @@ export function useDeviceMotion() {
       setActive(granted);
       return granted;
     } catch {
-      setPermission("denied");
+      // Thrown when iOS refuses outside a gesture. Not a denial — stay in
+      // `prompt` so the first touch can try again.
       return false;
     }
   }, []);
 
-  // The gesture that unlocks iOS. One shot, anywhere on the page.
+  /**
+   * Getting the sensors without asking the user to do anything.
+   *
+   * Android Chrome exposes `requestPermission` but grants it without a
+   * gesture; iOS exposes it and refuses outside one. So we just try, on
+   * mount — which covers Android — and only if that fails do we wait for the
+   * first touch anywhere on the page, which covers iOS without putting a
+   * button on a screen that was not designed to have one.
+   */
+  const triedAuto = useRef(false);
   useEffect(() => {
-    if (permission !== "prompt") return;
-    const onGesture = () => {
-      void request();
-      window.removeEventListener("pointerdown", onGesture);
-    };
-    window.addEventListener("pointerdown", onGesture);
-    return () => window.removeEventListener("pointerdown", onGesture);
+    if (permission !== "prompt" || triedAuto.current) return;
+    triedAuto.current = true;
+
+    let detach: (() => void) | undefined;
+    void request().then((granted) => {
+      if (granted) return;
+      const onGesture = () => {
+        void request();
+        window.removeEventListener("pointerdown", onGesture);
+      };
+      window.addEventListener("pointerdown", onGesture);
+      detach = () => window.removeEventListener("pointerdown", onGesture);
+    });
+
+    return () => detach?.();
   }, [permission, request]);
 
   // Sensors

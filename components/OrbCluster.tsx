@@ -280,6 +280,14 @@ export function OrbCluster({
       const rate = T.baseRate * g.float + shake * g.shakeSpeed;
       const ampK = (1 + shake * g.shakeAmount) * g.float;
 
+      /* How free the cluster is right now, 0..1, straight off how hard the
+         phone is being moved. At 0 the orbs hold the spacing Figma drew; at 1
+         they are loose marbles that happen to live near those positions. */
+      const freedom = Math.min(1, shake * g.freeContact);
+      const tether = g.spring * (1 - g.freeTether * freedom);
+      const roam = g.roam * (1 + g.freeRoam * freedom);
+      const repel = g.repel * (1 + g.freeRepel * freedom);
+
       // Where each orb calls home this frame, and how big it is there.
       for (let i = 0; i < n; i++) {
         const orb = ORBS[i];
@@ -330,16 +338,16 @@ export function OrbCluster({
         s.ty = floatY + tiltY * g.tiltTravel * depth * lead - liftT[i] * LIFT_PX;
 
         const mass = 1 + (orb.depth - 0.5) * T.massFromSize;
-        s.fx = ((s.tx - s.x) * g.spring) / mass - s.vx * g.drag;
-        s.fy = ((s.ty - s.y) * g.spring) / mass - s.vy * g.drag;
+        s.fx = ((s.tx - s.x) * tether) / mass - s.vx * g.drag;
+        s.fy = ((s.ty - s.y) * tether) / mass - s.vy * g.drag;
         s.fx += (accelX * g.throwForce * lead) / mass;
         s.fy += (accelY * g.throwForce * lead) / mass;
 
         const dx = s.x - s.tx;
         const dy = s.y - s.ty;
         const d = Math.hypot(dx, dy);
-        if (d > g.roam) {
-          const over = (d - g.roam) / g.roam;
+        if (d > roam) {
+          const over = (d - roam) / roam;
           s.fx -= (dx / d) * over * T.roamWall;
           s.fy -= (dy / d) * over * T.roamWall;
         }
@@ -357,12 +365,16 @@ export function OrbCluster({
           const d = Math.hypot(dx, dy) || 0.0001;
           // While regrouped the cluster is looser, so contact is measured
           // off the live sizes rather than the Figma spacing.
-          const min =
-            focusT > 0.02
-              ? lerp(MIN_DIST[i][j], ((home[i].size + home[j].size) / 2) * T.contact, focusT)
-              : MIN_DIST[i][j];
+          /* Contact distance. At rest it is the pair's own designed spacing,
+             which is what holds the composition together — and also what made
+             the cluster behave like a lattice, since no two orbs could ever
+             close on each other. Shaking collapses it toward the orbs' actual
+             radii, so they stop holding formation and start colliding. */
+          const touch = ((home[i].size + home[j].size) / 2) * T.contact;
+          const packed = focusT > 0.02 ? lerp(MIN_DIST[i][j], touch, focusT) : MIN_DIST[i][j];
+          const min = lerp(packed, touch, freedom);
           if (d >= min) continue;
-          const push = ((min - d) / min) * g.repel;
+          const push = ((min - d) / min) * repel;
           const nx = dx / d;
           const ny = dy / d;
           sa.fx -= nx * push * invMass[i];

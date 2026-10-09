@@ -1,6 +1,5 @@
 "use client";
 
-import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 
 export type CardState = "empty" | "filled" | "verified";
 
@@ -36,24 +35,20 @@ export function OtpCard({
   }
 
   if (state === "filled") {
+    /* The same revolving sweep the verified state uses, in chrome instead of
+       green, so a box filling and a box verifying are the same gesture at two
+       temperatures.
+       HoverBorderGradient was here and did not read: it steps a blurred
+       highlight between four edge positions, which is a pulse rather than a
+       revolution, and on a white card a white highlight over a pale base is
+       nothing at all. */
     return (
-      <HoverBorderGradient
-        as="div"
-        active
-        duration={0.75}
-        sweepColor="#f6f8fb"
-        highlightColor="#eef2f8"
-        // 1px of ring, and the inner panel inset by exactly the same, or the
-        // border comes out thicker on two sides than the other two. The base
-        // is light enough that the travelling spark reads as a sheen rather
-        // than as one edge being darker than the rest.
-        style={{ width: "100%", height: "100%", padding: 1, background: "#e2e6ed" }}
-        containerClassName="rounded-[inherit]! gap-0! border-0! shadow-[0_4px_28px_-1.92px_rgba(0,0,0,0.07)]"
-        className="flex! h-full! w-full! items-center! justify-center! rounded-[inherit]! bg-transparent! px-0! py-0! text-[#1a1a1a]!"
-        innerClassName="rounded-[15px]! bg-white! inset-[1px]!"
-      >
-        {children}
-      </HoverBorderGradient>
+      <div className="relative h-full w-full rounded-[inherit] bg-white shadow-[0_4px_28px_-1.92px_rgba(0,0,0,0.07)]">
+        <span className="otp-lining otp-lining--silver" style={{ borderRadius: "inherit" }} />
+        <span className="relative z-10 flex h-full w-full items-center justify-center rounded-[inherit]">
+          {children}
+        </span>
+      </div>
     );
   }
 

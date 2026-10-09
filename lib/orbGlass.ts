@@ -89,6 +89,21 @@ export type OrbGlass = {
   spring: number;
   /** drag. Below ~2*sqrt(spring) they overshoot and glide. */
   drag: number;
+
+  /**
+   * How much a shake frees the cluster.
+   *
+   * At rest the orbs hold the spacing Figma drew, which is what keeps the
+   * composition intact — but it also means every pair has a fixed separation
+   * it refuses to give up, so the whole thing behaves like a lattice. These
+   * dissolve that in proportion to how hard the phone is moving: contact
+   * falls back to the orbs' actual radii so they can close and bounce, the
+   * tether slackens, and they are allowed to wander further from home.
+   */
+  freeContact: number;
+  freeTether: number;
+  freeRoam: number;
+  freeRepel: number;
 };
 
 export const ORB_GLASS_DEFAULTS: OrbGlass = {
@@ -131,11 +146,16 @@ export const ORB_GLASS_DEFAULTS: OrbGlass = {
   shakeSpeed: 14,
   shakeAmount: 4,
   throwForce: 46,
-  roam: 54,
-  repel: 340,
+  roam: 64,
+  repel: 420,
   tiltTravel: 34,
   spring: 11,
-  drag: 2.1,
+  drag: 1.8,
+
+  freeContact: 1,
+  freeTether: 0.75,
+  freeRoam: 2.5,
+  freeRepel: 1.2,
 };
 
 /** Slider definitions for the bench at /orbs. */
@@ -181,6 +201,11 @@ export const ORB_GLASS_SLIDERS: {
   { group: "Motion", key: "tiltTravel", label: "tilt travel", min: 0, max: 120, step: 1 },
   { group: "Motion", key: "spring", label: "spring", min: 1, max: 80, step: 0.5 },
   { group: "Motion", key: "drag", label: "drag", min: 0.3, max: 14, step: 0.1 },
+
+  { group: "Shaken loose", key: "freeContact", label: "break formation", min: 0, max: 1, step: 0.02 },
+  { group: "Shaken loose", key: "freeTether", label: "slacken tether", min: 0, max: 1, step: 0.02 },
+  { group: "Shaken loose", key: "freeRoam", label: "wander further", min: 0, max: 6, step: 0.1 },
+  { group: "Shaken loose", key: "freeRepel", label: "bounce harder", min: 0, max: 4, step: 0.1 },
 ];
 
 /** "#bcd7ff" -> [0.74, 0.84, 1] */

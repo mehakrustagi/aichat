@@ -41,7 +41,7 @@ export function StepIcon({ done, size = RING }: { done: boolean; size?: number }
       style={{ width: size, height: size }}
     >
       <span
-        className="absolute inset-0 rounded-full motion-safe:animate-[step-ring_1.6s_linear_infinite]"
+        className="absolute inset-0 rounded-full motion-safe:animate-[step-ring_2.4s_linear_infinite]"
         style={{
           background: `conic-gradient(from 0deg, #000000, #5057EA, #EF4646, #EDD758, #000000)`,
           mask: `radial-gradient(farthest-side, transparent calc(100% - ${BORDER}px), #000 calc(100% - ${BORDER}px))`,

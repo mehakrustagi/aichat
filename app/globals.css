@@ -62,25 +62,32 @@ body {
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   -webkit-mask-composite: xor;
-  animation: lining-sweep 2.4s linear infinite;
+  animation: lining-sweep 3.2s linear infinite;
   transition: opacity 260ms ease;
+  /* Both sweeps held back a notch — at full strength the chrome and the green
+     read as a painted ring rather than as light moving over an edge. */
+  opacity: 0.9;
 }
 
 /* Silver: a cold chrome with two bright passes, so the sweep reads as metal
    catching the light rather than a hue cycling. */
 .otp-lining--silver {
+  /* Chrome, not grey: two bright passes against a dark trough so the sweep
+     reads as metal catching the light. A pale base with a white highlight on
+     a white card is invisible, which is what the first pass at this was. */
   background: conic-gradient(
     from var(--lining-angle),
     #ffffff 0%,
-    #aab3c0 12%,
-    #ffffff 25%,
-    #7c8694 38%,
-    #ffffff 52%,
-    #c3cbd6 66%,
-    #ffffff 80%,
-    #9aa3b1 92%,
+    #9aa3b1 10%,
+    #5f6775 20%,
+    #ffffff 32%,
+    #b8c0cc 44%,
+    #6b7483 56%,
+    #ffffff 68%,
+    #a6aeba 82%,
     #ffffff 100%
   );
+  animation-duration: 2.8s;
 }
 
 .otp-lining--green {
@@ -99,7 +106,7 @@ body {
     #6ee7b7 88%,
     #0b0b0b 100%
   );
-  animation-duration: 1.6s;
+  animation-duration: 2.2s;
 }
 
 @media (prefers-reduced-motion: reduce) {
