@@ -1,0 +1,12 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 820, height: 1400 }, deviceScaleFactor: 1.5 });
+page.on("pageerror", (e) => console.log("[pageerror]", e.message));
+page.on("console", (m) => m.type() === "error" && console.log("[console]", m.text()));
+await page.goto((process.env.URL ?? "http://localhost:3001") + "/orb-lab", { waitUntil: "networkidle" });
+await page.waitForTimeout(2500);
+await page.mouse.move(700, 300);
+await page.waitForTimeout(1200);
+await page.screenshot({ path: ".scratch/lab.png", fullPage: true });
+console.log("ok");
+await browser.close();

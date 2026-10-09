@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="bolivia" clip-path="url(#clip0_0_68)">
+<path id="Vector" d="M18 8.99999C18 7.89911 17.802 6.84453 17.4402 5.86957L9 5.47825L0.559793 5.86954C0.198 6.84453 0 7.89911 0 8.99999C0 10.1009 0.198 11.1555 0.559793 12.1304L9 12.5217L17.4402 12.1304C17.802 11.1555 18 10.1009 18 8.99999Z" fill="#FFDA44"/>
+<path id="Vector_2" d="M8.99999 17.8693C12.8697 17.8693 16.1686 15.4269 17.4402 11.9997H0.559781C1.83142 15.4269 5.1303 17.8693 8.99999 17.8693Z" fill="#6DA544"/>
+<path id="Vector_3" d="M0.559781 5.86958H17.4402C16.1686 2.44237 12.8697 0 8.99999 0C5.1303 0 1.83142 2.44237 0.559781 5.86958V5.86958Z" fill="#D80027"/>
+</g>
+<defs>
+<clipPath id="clip0_0_68">
+<rect width="18" height="18" fill="white"/>
+</clipPath>
+</defs>
+</svg>

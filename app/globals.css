@@ -1,26 +1,144 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html,
+body {
+  height: 100%;
+  background: #e9ebef;
+  color: #0b0b0b;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  /* the orbs react to the phone, not to scrolling */
+  overscroll-behavior: none;
+}
+
+/* Slow colour drift inside the atlys pill. */
+@keyframes pill-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-14px, 6px, 0);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[pill-drift_14s_ease-in-out_infinite\],
+  .animate-\[pill-drift_14s_ease-in-out_infinite_reverse\] {
+    animation: none;
+  }
+}
+
+/* The lining that runs around an OTP box.
+   A registered custom property so the angle can actually be animated —
+   an unregistered one would jump between keyframes instead of sweeping. */
+@property --lining-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes lining-sweep {
+  to {
+    --lining-angle: 360deg;
+  }
+}
+
+/* Gradient borders: paint the gradient on the padding box, then punch the
+   content box out of it so only the ring survives. */
+.otp-lining {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  animation: lining-sweep 2.4s linear infinite;
+  transition: opacity 260ms ease;
+}
+
+/* Silver: a cold chrome with two bright passes, so the sweep reads as metal
+   catching the light rather than a hue cycling. */
+.otp-lining--silver {
+  background: conic-gradient(
+    from var(--lining-angle),
+    #ffffff 0%,
+    #aab3c0 12%,
+    #ffffff 25%,
+    #7c8694 38%,
+    #ffffff 52%,
+    #c3cbd6 66%,
+    #ffffff 80%,
+    #9aa3b1 92%,
+    #ffffff 100%
+  );
+}
+
+.otp-lining--green {
+  background: conic-gradient(
+    from var(--lining-angle),
+    #d1fae5 0%,
+    #10b981 14%,
+    #ecfdf5 28%,
+    #059669 42%,
+    #6ee7b7 58%,
+    #047857 72%,
+    #a7f3d0 86%,
+    #10b981 100%
+  );
+  animation-duration: 1.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .otp-lining {
+    animation: none;
+  }
+}
+
+@keyframes caret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes trace {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.7) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(25deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 140% 0; }
+  100% { background-position: -40% 0; }
+}
+
+/* The ring that goes out as the tick lands. */
+@keyframes tick-pulse {
+  0% { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* The Tailwind Connect treatment, moving. The glow drifts across the head of
+   the card and the hairline sweeps under its foot. */
+@keyframes connect-glow {
+  0%, 100% { background-position: 18% 0; }
+  50% { background-position: 82% 0; }
+}
+
+@keyframes connect-hairline {
+  0% { transform: translateX(-26%); opacity: 0.25; }
+  50% { opacity: 1; }
+  100% { transform: translateX(26%); opacity: 0.25; }
 }
