@@ -1,0 +1,16 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 440, height: 956 }, deviceScaleFactor: 2 });
+page.on("pageerror", (e) => console.log("[pageerror]", e.message));
+await page.goto("http://localhost:3001", { waitUntil: "networkidle" });
+await page.waitForTimeout(1100);
+await page.getByRole("button", { name: "Login using your Atlys account" }).click({ force: true });
+await page.waitForTimeout(2400);
+await page.screenshot({ path: ".scratch/f-1.png" });
+await page.waitForTimeout(2400);
+await page.screenshot({ path: ".scratch/f-2.png" });
+await page.getByRole("button", { name: "Log in to another account" }).click({ force: true });
+await page.waitForTimeout(900);
+await page.screenshot({ path: ".scratch/f-3.png" });
+console.log("ok");
+await browser.close();

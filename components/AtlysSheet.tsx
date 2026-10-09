@@ -3,11 +3,26 @@
 import Image from "next/image";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { LiquidPill } from "@/components/motion/LiquidPill";
+import { StepIcon, STEP_TEXT_GRADIENT } from "@/components/motion/StepIcon";
+import { VerifiedTick } from "@/components/motion/VerifiedTick";
+import { LoaderCore } from "@/components/ui/multi-step-loader";
 import { sheetItem, sheetVariants } from "@/lib/sheetMotion";
-import { LoaderOne } from "@/components/ui/loader";
+import { DocumentStack, STACK_W } from "@/components/motion/DocumentStack";
+import { DotShimmer } from "@/components/motion/DotShimmer";
+import { RollingTitle } from "@/components/motion/RollingTitle";
+import { SheetFootField } from "@/components/motion/SheetFootField";
+import { ConnectDots } from "@/components/motion/ConnectDots";
 import { haptic } from "@/lib/haptics";
 
 export const ATLYS_SHEET_HEIGHT = 680;
+/** The failure state has no card, no steps and no CTA, so the sheet comes
+ *  down to meet it rather than leaving two thirds of itself empty. */
+const FAILED_HEIGHT = 400;
+/** Steps start at y350 and a row is 26 tall on an 18 gap, so one row clears
+ *  at 376 and two at 420. The frame below each gets room, not an average. */
+const CARD_TOP_ONE_ROW = 410;
+const CARD_TOP_TWO_ROWS = 456;
 
 /**
  * Signing in through an existing Atlys account (Figma 458:20558 →
@@ -16,10 +31,33 @@ export const ATLYS_SHEET_HEIGHT = 680;
  * The first two stages run themselves — they're a progress narrative, not a
  * decision — then it waits on "Access via Atlys" before the handshake lands.
  */
-type Stage = "connecting" | "profile" | "confirm" | "connected";
+type Stage = "connecting" | "profile" | "confirm" | "connected" | "failed";
 
 /** ms each self-advancing stage holds before the next */
 const HOLD = { connecting: 2200, profile: 2200, connected: 1900 } as const;
+/** When the first step stops searching and lands, partway through stage one —
+ *  the node draws it already green with the visas underneath it. */
+const FIRST_DONE_MS = 1250;
+
+/** The stamp's box, and how wide its printed mount is. A narrow mount makes
+ *  the art look trimmed to the edge; this is what puts the perforations a
+ *  long way from anything you are meant to look at. */
+/* The perforation is Figma's own boolean path (458:20997), exported and used
+   as a mask. Rebuilding it from CSS gradient layers was close but never bit
+   the edge — this is the designed silhouette, at the size the node is drawn:
+   64.6875 x 72. */
+const STAMP_W = 64.6875;
+const STAMP_H = 72;
+const MOUNT = 5;
+const STAMP_MASK = {
+  maskImage: "url(/atlys/stamp.svg)",
+  maskSize: "100% 100%",
+  maskRepeat: "no-repeat",
+  maskMode: "alpha",
+  WebkitMaskImage: "url(/atlys/stamp.svg)",
+  WebkitMaskSize: "100% 100%",
+  WebkitMaskRepeat: "no-repeat",
+} as const;
 
 const POSTCARDS = [
   { src: "/atlys/card-halong.png", rotate: -9 },
@@ -39,43 +77,41 @@ function Tile({ children, className = "" }: { children: React.ReactNode; classNa
   );
 }
 
-function TaskRow({
-  label,
-  accent,
-  done,
-  active,
-}: {
-  label: string;
-  accent: string;
-  done: boolean;
-  active: boolean;
-}) {
+/**
+ * The two things the agent does, as Aceternity's MultiStepLoader.
+ *
+ * Only `LoaderCore` is used: the exported component wraps it in a fixed
+ * full-screen backdrop, which is the wrong shape inside a bottom sheet. The
+ * scroll is off because both steps are on screen at once — it exists for long
+ * lists showing one step at a time.
+ *
+ * The accents are ours. The loader marks the active step by colour, and the
+ * design already gives each line its own: warm for the visas, green for the
+ * profile.
+ */
+const STEP_LABELS = ["Retrieving your visas", "Collecting your profile data"];
+
+/**
+ * A step's copy, painted in the spectrum that matches its state and rolled
+ * over when that state changes — searching is the four-stop working gradient,
+ * done is black falling to green. The drum is keyed on the state, so
+ * finishing turns the line over rather than recolouring it in place.
+ */
+function stepText(label: string, done: boolean) {
   return (
-    <div
-      className="flex h-[48px] w-full items-center gap-[14px] transition-opacity duration-300"
-      style={{ opacity: done || active ? 1 : 0 }}
-    >
-      {done ? (
-        <span className="flex h-[23px] w-[23px] shrink-0 items-center justify-center rounded-full bg-black">
-          <svg viewBox="0 0 24 24" fill="none" className="h-[13px] w-[13px]">
-            <path d="m5 12.5 4.5 4.5L19 7" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+    // The loader wraps this in an inline span, and the drum positions every
+    // face absolutely — without a width of its own it collapses and clips
+    // them away. Same trap as the sheet titles.
+    <span key={label} className="block w-[280px]">
+      <RollingTitle title={`${label}|${done ? "done" : "live"}`} height={20}>
+      <span
+        className="whitespace-nowrap bg-clip-text text-[16px] font-medium leading-[20px] tracking-[-0.3px] text-transparent"
+        style={{ backgroundImage: done ? STEP_TEXT_GRADIENT.done : STEP_TEXT_GRADIENT.live }}
+      >
+          {label}
         </span>
-      ) : (
-        <span className="h-[23px] w-[23px] shrink-0 rounded-full border-[1.5px] border-[#d6d9dc] border-t-[#9aa3b1] motion-safe:animate-spin [animation-duration:1.1s]" />
-      )}
-      <p className="text-[16px] font-medium leading-[20px] tracking-[-0.3px] text-[#1a1a1a]">
-        {label.split("|")[0]}
-        <span style={{ color: accent }}>{label.split("|")[1]}</span>
-      </p>
-      {!done && (
-        <span className="ml-auto flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#0d9b63]">
-          <svg viewBox="0 0 24 24" fill="none" className="h-[12px] w-[12px]">
-            <path d="m5 12.5 4.5 4.5L19 7" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
-      )}
-    </div>
+      </RollingTitle>
+    </span>
   );
 }
 
@@ -100,6 +136,7 @@ type Props = {
 
 export function AtlysSheet({ open, onDone, onDismiss }: Props) {
   const [stage, setStage] = useState<Stage>("connecting");
+  const [firstDone, setFirstDone] = useState(false);
   const timers = useRef<number[]>([]);
 
   // Reset and run the opening narrative each time the sheet comes up.
@@ -107,7 +144,9 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
     if (!open) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- restarts the narrative each time the sheet opens
     setStage("connecting");
+    setFirstDone(false);
     timers.current = [
+      window.setTimeout(() => setFirstDone(true), FIRST_DONE_MS),
       window.setTimeout(() => setStage("profile"), HOLD.connecting),
       window.setTimeout(() => setStage("confirm"), HOLD.connecting + HOLD.profile),
     ];
@@ -128,15 +167,20 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
 
   const working = stage === "connecting" || stage === "profile";
   const connected = stage === "connected";
+  const failed = stage === "failed";
+  const sheetHeight = failed ? FAILED_HEIGHT : ATLYS_SHEET_HEIGHT;
+  /** How many rows are on screen, and the index of the last completed one. */
+  const rows = stage === "connecting" ? 1 : 2;
+  const done = stage === "connecting" ? (firstDone ? 0 : -1) : 0;
 
   return (
     <motion.div
       className="absolute bottom-0 left-0 w-[440px] overflow-hidden rounded-t-[44px] bg-white shadow-[0_-8px_40px_-12px_rgba(0,0,0,0.12)]"
-      style={{ height: ATLYS_SHEET_HEIGHT, transformPerspective: 1400 }}
-      variants={sheetVariants}
-      custom={ATLYS_SHEET_HEIGHT + 40}
-      initial="hidden"
       animate={open ? "visible" : "hidden"}
+      style={{ height: sheetHeight, transformPerspective: 1400 }}
+      variants={sheetVariants}
+      custom={sheetHeight + 40}
+      initial="hidden"
       role="dialog"
       aria-label="Connecting to Atlys"
       aria-hidden={!open}
@@ -163,23 +207,21 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
 
         {/* the dots give way to the green check once the handshake lands */}
         <div className="relative flex w-[128px] items-center justify-center">
-          {/* Aceternity's LoaderOne, scaled to the weight the sheet wants —
-              the motion is the component's, the size is ours. */}
           <div
             className="transition-opacity duration-300"
-            style={{ opacity: connected ? 0 : 1, transform: "scale(0.55)" }}
+            style={{ opacity: connected || failed ? 0 : 1 }}
           >
-            <LoaderOne />
+            <ConnectDots />
           </div>
           <div
             className="absolute transition-all duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]"
             style={{ opacity: connected ? 1 : 0, transform: `scale(${connected ? 1 : 0.6})` }}
           >
-            <Tile className="!bg-[#e9f7f0]">
-              <svg viewBox="0 0 24 24" fill="none" className="h-[40px] w-[40px]">
-                <circle cx="12" cy="12" r="9.5" stroke="#0d9b63" strokeWidth="1.9" />
-                <path d="m7.6 12.4 3.1 3.1 5.7-6" stroke="#0d9b63" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+            <Tile className="bg-[#e9f7f0]">
+              <span className="relative flex h-[40px] w-[40px] items-center justify-center">
+                <span className="absolute inset-0 rounded-full border-[1.9px] border-[#0d9b63]" />
+                <VerifiedTick on={connected} size={24} color="#0d9b63" weight={2.4} delay={0.26} />
+              </span>
             </Tile>
           </div>
         </div>
@@ -207,90 +249,150 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
 
       {/* --- copy ----------------------------------------------------- */}
       <motion.div variants={sheetItem} className="absolute left-1/2 top-[228px] flex w-[340px] -translate-x-1/2 flex-col items-center gap-[10px] text-center">
-        <p className="whitespace-nowrap text-[24px] font-medium leading-[28px] tracking-[-0.96px] text-[#0b0b0b]">
-          {stage === "confirm" ? (
-            "Confirm your credentials"
-          ) : connected ? (
-            <>
-              You&rsquo;re <span className="text-[#0d9b63]">connected</span>
-            </>
-          ) : (
-            <>
-              Connecting to <span className="text-[#0d9b63]">Atlys</span>
-            </>
-          )}
-        </p>
-        <p className="text-[16px] font-medium leading-[20px] tracking-[-0.64px] text-[#999]">
-          {stage === "confirm"
-            ? "Verify your Atlys account now!"
-            : connected
-              ? "Welcome to Hermes"
-              : "Starting secure communication"}
-        </p>
+        {/* Both lines ride the same drum, so a stage change turns them over
+            rather than swapping them out. */}
+        <RollingTitle
+          title={failed ? "failed" : stage === "confirm" ? "confirm" : connected ? "connected" : "connecting"}
+          height={28}
+          align="center"
+        >
+          <span className="whitespace-nowrap text-[24px] font-medium leading-[28px] tracking-[-0.96px] text-[#0b0b0b]">
+            {failed ? (
+              <>
+                We{" "}
+                <span
+                  className="bg-clip-text text-transparent"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(90deg, #F0A04B 0%, #EF6C45 52%, #F2B544 100%)",
+                  }}
+                >
+                  couldn&rsquo;t connect
+                </span>
+              </>
+            ) : stage === "confirm" ? (
+              "Confirm your credentials"
+            ) : connected ? (
+              <>
+                You&rsquo;re <span className="text-[#0d9b63]">connected</span>
+              </>
+            ) : (
+              <>
+                Connecting to <span className="text-[#0d9b63]">Atlys</span>
+              </>
+            )}
+          </span>
+        </RollingTitle>
+
+        <RollingTitle
+          title={
+            failed
+              ? "Download Atlys app and login to access Hermes"
+              : stage === "confirm"
+              ? "Verify your Atlys account now!"
+              : connected
+                ? "Welcome to Hermes"
+                : "Starting secure communication"
+          }
+          tone="grey"
+          height={20}
+          align="center"
+          className="whitespace-nowrap text-[16px] font-medium leading-[20px] tracking-[-0.64px]"
+        />
       </motion.div>
 
       {/* --- progress ------------------------------------------------- */}
-      <div
-        className="absolute left-[40px] top-[330px] flex w-[360px] flex-col transition-opacity duration-300"
-        style={{ opacity: working ? 1 : 0 }}
+      <motion.div
+        variants={sheetItem}
+        className="absolute left-[40px] top-[350px] w-[360px] transition-opacity duration-300"
       >
-        <TaskRow
-          label="Retrieving |your visas"
-          accent="#e07a3f"
-          done={stage === "profile"}
-          active
+        {/* The gate lives on an inner element: `sheetItem` animates opacity
+            on the wrapper, and a motion-driven value beats the style prop —
+            so gating the wrapper did nothing and the steps stayed up through
+            the failure state. */}
+        <div
+          className="transition-opacity duration-300"
+          style={{ opacity: working ? 1 : 0, pointerEvents: working ? "auto" : "none" }}
+        >
+        {/* A step appears when it starts, not before: the node shows one row
+            under "Connecting", two under "Collecting". Rendering all of them
+            greyed put the second row under the card. */}
+        <LoaderCore
+          loadingStates={STEP_LABELS.slice(0, rows).map((label, i) => ({
+            text: stepText(label, i <= done),
+          }))}
+          value={done}
+          scroll={false}
+          className="mx-0 mt-0 max-w-none [&>div]:mb-[18px] [&>div]:items-center [&>div]:gap-[12px]"
+          renderDone={() => <StepIcon done />}
+          renderPending={() => <StepIcon done={false} />}
         />
-        <TaskRow
-          label="Collecting |your profile data"
-          accent="#0d9b63"
-          done={false}
-          active={stage === "profile"}
-        />
-      </div>
+        </div>
+      </motion.div>
 
       {/* --- what is being retrieved ---------------------------------- */}
       <div
-        className="absolute left-[45px] top-[414px] h-[170px] w-[350px] overflow-hidden rounded-[20px] bg-white shadow-[0_8px_36px_-10px_rgba(0,0,0,0.14)] transition-all duration-[420ms]"
+        className="absolute left-[45px] h-[158px] w-[350px] overflow-hidden rounded-[20px] bg-white shadow-[0_8px_36px_-10px_rgba(0,0,0,0.14)] transition-all duration-[420ms]"
         style={{
-          opacity: working ? 1 : 0,
-          transform: `translateY(${working ? 0 : 12}px)`,
+          // One step row in this stage, two in the next, so the frame sits
+          // where the rows leave off instead of under the worst case.
+          top: CARD_TOP_ONE_ROW,
+          opacity: stage === "connecting" ? 1 : 0,
+          transform: `translateY(${stage === "connecting" ? 0 : 12}px)`,
         }}
       >
-        <div className="flex flex-col gap-[7px] px-[18px] pt-[16px]">
-          <span className="h-[7px] w-[96px] rounded-full bg-[#eceef1]" />
-          <span className="h-[7px] w-[150px] rounded-full bg-[#f2f4f6]" />
+        <div className="px-[18px] pt-[16px]">
+          <DotShimmer rows={2} width={300} />
         </div>
         {/* stage one shows the visas themselves; stage two is still loading */}
         <div
           className="absolute bottom-0 left-0 flex w-full items-end justify-center gap-[6px] px-[16px] pb-[8px] transition-opacity duration-500"
-          style={{ opacity: stage === "connecting" ? 1 : 0 }}
         >
           {POSTCARDS.map((c) => (
-            <Image
+            /* Two elements, and the split matters: `filter` is applied BEFORE
+               `mask`, so a drop-shadow on the masked element is a shadow of
+               the un-masked square. The wrapper carries the shadow and sees
+               the already-perforated child, which is what traces the notches
+               — and tracing them is the only way they read, since the mount
+               is white on a white card. */
+            <div
               key={c.src}
-              src={c.src}
-              alt=""
-              width={60}
-              height={82}
-              style={{ width: 60, height: 82, transform: `rotate(${c.rotate}deg)` }}
-              className="rounded-[6px] border-[3px] border-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.25)]"
-            />
+              className="shrink-0 [filter:drop-shadow(0_0.5px_0.6px_rgba(0,0,0,0.3))_drop-shadow(0_4px_9px_rgba(0,0,0,0.12))]"
+              style={{ transform: `rotate(${c.rotate}deg)` }}
+            >
+              <div style={{ width: STAMP_W, height: STAMP_H, background: "#fff", ...STAMP_MASK }}>
+                <Image
+                  src={c.src}
+                  alt=""
+                  width={60}
+                  height={82}
+                  style={{
+                    width: STAMP_W - MOUNT * 2,
+                    height: STAMP_H - MOUNT * 2,
+                    margin: MOUNT,
+                  }}
+                  className="object-cover"
+                />
+              </div>
+            </div>
           ))}
         </div>
-        <div
-          className="absolute inset-0 transition-opacity duration-500"
-          style={{ opacity: stage === "profile" ? 1 : 0 }}
-        >
-          <div
-            className="absolute inset-0 motion-safe:animate-[shimmer_1.8s_linear_infinite]"
-            style={{
-              background:
-                "linear-gradient(100deg, rgba(255,255,255,0) 20%, rgba(214,232,255,0.55) 45%, rgba(255,255,255,0) 70%)",
-              backgroundSize: "220% 100%",
-            }}
-          />
-          <span className="absolute bottom-[18px] left-[18px] h-[4px] w-[16px] rounded-full bg-[#4c9cf0]" />
-        </div>
+      </div>
+
+      {/* Still being read: the stack the vault uses for a document it has
+          not finished with. Replaces the card entirely for this stage —
+          Figma 458:28426 draws it as its own object, not as card contents. */}
+      <div
+        className="absolute left-1/2 transition-all duration-[420ms]"
+        style={{
+          top: CARD_TOP_TWO_ROWS,
+          width: STACK_W,
+          marginLeft: -STACK_W / 2,
+          opacity: stage === "profile" ? 1 : 0,
+          transform: `translateY(${stage === "profile" ? 0 : 12}px)`,
+        }}
+      >
+        <DocumentStack />
       </div>
 
       {/* --- the decision --------------------------------------------- */}
@@ -319,44 +421,28 @@ export function AtlysSheet({ open, onDone, onDismiss }: Props) {
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={accept}
-          className="relative mt-[46px] h-[50px] w-[340px] overflow-hidden rounded-[84px]"
-        >
-          <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-[84px]">
-            <Image
-              src="/icons/pill-gradient.svg"
-              alt=""
-              width={371.659}
-              height={179.296}
-              style={{ left: 2.41, top: -64.64, width: 371.659, height: 179.296 }}
-              className="absolute max-w-none animate-[pill-drift_14s_ease-in-out_infinite]"
-            />
-          </span>
-          <span className="pointer-events-none absolute inset-0 rounded-[84px] bg-white/10" />
-          <span className="relative text-[14px] font-semibold tracking-[-0.14px] text-black">
+        <LiquidPill onTap={accept} className="mt-[46px]" ariaLabel="Access via Atlys">
+          <span className="text-[14px] font-semibold tracking-[-0.14px] text-black">
             Access via Atlys
           </span>
-        </button>
+        </LiquidPill>
 
+        {/* Guessed trigger: the design gives no path into the failure state,
+            and this is the only other action on the screen. Choosing another
+            account means reaching the Atlys app, and the failure copy is
+            literally "Download Atlys app" — so it is at least coherent. One
+            line to point somewhere else. */}
         <button
           type="button"
-          onClick={onDismiss}
+          onClick={() => setStage("failed")}
           className="mt-[26px] text-[14px] font-medium tracking-[-0.28px] text-[#1a1a1a] underline underline-offset-[3px]"
         >
           Log in to another account
         </button>
       </div>
 
-      <Image
-        src="/otp/union.svg"
-        alt=""
-        width={379}
-        height={214}
-        style={{ width: 379, height: 214 }}
-        className="pointer-events-none absolute bottom-[-150px] left-[30px] max-w-none"
-      />
+      <SheetFootField rows={7} />
+
     </motion.div>
   );
 }

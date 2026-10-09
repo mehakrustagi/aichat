@@ -12,10 +12,13 @@
     "phone": "adb reverse tcp:3001 tcp:3001 && echo 'Phone: open http://localhost:3001 in Chrome'"
   },
   "dependencies": {
+    "@tabler/icons-react": "^3.49.0",
+    "clsx": "^2.1.1",
     "motion": "^14.0.0",
     "next": "16.4.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

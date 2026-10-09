@@ -84,18 +84,22 @@ body {
 }
 
 .otp-lining--green {
+  /* The two stops the design gives a completed state — ink falling to green —
+     rotated so the shine travels the border instead of sitting on it. Repeated
+     through black so the bright pass reads as one highlight going round, not
+     as a hue cycling. */
   background: conic-gradient(
     from var(--lining-angle),
-    #d1fae5 0%,
-    #10b981 14%,
-    #ecfdf5 28%,
-    #059669 42%,
-    #6ee7b7 58%,
-    #047857 72%,
-    #a7f3d0 86%,
-    #10b981 100%
+    #0b0b0b 0%,
+    #10b981 18%,
+    #6ee7b7 28%,
+    #10b981 38%,
+    #0b0b0b 55%,
+    #10b981 78%,
+    #6ee7b7 88%,
+    #0b0b0b 100%
   );
-  animation-duration: 1.4s;
+  animation-duration: 1.6s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -141,4 +145,9 @@ body {
   0% { transform: translateX(-26%); opacity: 0.25; }
   50% { opacity: 1; }
   100% { transform: translateX(26%); opacity: 0.25; }
+}
+
+/* The searching ring turns; the spectrum is the same one the live copy uses. */
+@keyframes step-ring {
+  to { transform: rotate(360deg); }
 }

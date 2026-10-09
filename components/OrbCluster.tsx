@@ -35,6 +35,9 @@ export const ORB_TUNING = {
   lightSwing: 0.85,
 } as const;
 
+/** How far an orb is held up while it waits for its digit. */
+const LIFT_PX = 120;
+
 /** The largest orb, used to normalise mass. */
 const MAX_SIZE = Math.max(...ORBS.map((o) => o.size));
 
@@ -80,16 +83,32 @@ type Props = {
   /** 0 = the full thirteen in their Figma layout, 1 = the five that regroup
    *  once the keyboard is up. Anything between is the transition. */
   focus?: number;
+  /** True once the field is live: the cluster rises and waits. */
+  lifted?: boolean;
+  /** How many digits are in. Each one drops the next orb back down. */
+  typed?: number;
+  /** How many digits this field wants — ten for the number, six for the OTP.
+   *  Orbs past this take no part in the round. */
+  slots?: number;
 };
 
-export function OrbCluster({ motion, className, offsetY = 0, glass, focus = 0 }: Props) {
+export function OrbCluster({
+  motion,
+  className,
+  offsetY = 0,
+  glass,
+  focus = 0,
+  lifted = false,
+  typed = 0,
+  slots = 10,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Read inside the frame loop rather than re-creating the GL context on
   // every slider nudge.
-  const liveRef = useRef({ offsetY, glass: glass ?? ORB_GLASS_DEFAULTS, focus });
+  const liveRef = useRef({ offsetY, glass: glass ?? ORB_GLASS_DEFAULTS, focus, lifted, typed, slots });
   useEffect(() => {
-    liveRef.current = { offsetY, glass: glass ?? ORB_GLASS_DEFAULTS, focus };
-  }, [offsetY, glass, focus]);
+    liveRef.current = { offsetY, glass: glass ?? ORB_GLASS_DEFAULTS, focus, lifted, typed, slots };
+  }, [offsetY, glass, focus, lifted, typed, slots]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -199,6 +218,17 @@ export function OrbCluster({ motion, className, offsetY = 0, glass, focus = 0 }:
     }));
     const invMass = ORBS.map((o) => (MAX_SIZE * MAX_SIZE) / (o.size * o.size));
     const home = ORBS.map((o) => ({ cx: o.cx, cy: o.cy, size: o.size, alpha: 1 }));
+
+    /* The orbs that take part in the count, left to right across the
+       regrouped cluster, so they drop in the order you read them. */
+    const dropOrder = ORBS.map((o, i) => ({ o, i }))
+      .filter(({ o }) => o.focus && !o.anchored)
+      .sort((a, b) => a.o.focus!.cx - b.o.focus!.cx)
+      .map(({ i }) => i);
+    const rank = ORBS.map(() => -1);
+    dropOrder.forEach((orbIndex, r) => (rank[orbIndex] = r));
+    /** eased 0..1 per orb: 1 is held up, 0 is back where it belongs */
+    const liftT = ORBS.map(() => 0);
     // back to front, so the paint order Figma chose survives
     const order = ORBS.map((_, i) => i).sort((a, b) => ORBS[a].z - ORBS[b].z);
 
@@ -209,9 +239,18 @@ export function OrbCluster({ motion, className, offsetY = 0, glass, focus = 0 }:
 
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+    /* Frame cost, smoothed. The shader does four texture reads per pixel for
+       the chromatic split alone, and at DPR 3 on a tall handset that is close
+       to two million pixels a frame — enough to drop below 60 and make the
+       tilt read as stuttering rather than as a slow sensor. When frames run
+       long we render fewer pixels; the canvas is scaled to fit either way, so
+       the only visible cost is a little softness. */
+    let frameMs = 16.7;
+    let budget = 3;
+
     const resize = () => {
-      const next = Math.min(window.devicePixelRatio || 1, 3);
-      if (next === dpr) return;
+      const next = Math.min(window.devicePixelRatio || 1, budget);
+      if (Math.abs(next - dpr) < 0.01) return;
       dpr = next;
       canvas.width = Math.round(DESIGN_WIDTH * dpr);
       canvas.height = Math.round(ORB_CANVAS_HEIGHT * dpr);
@@ -224,12 +263,17 @@ export function OrbCluster({ motion, className, offsetY = 0, glass, focus = 0 }:
 
     const tick = (now: number) => {
       // Clamp dt so a backgrounded tab doesn't fling the springs apart.
-      const dt = Math.min((now - last) / 1000, 1 / 30);
+      const raw = now - last;
+      const dt = Math.min(raw / 1000, 1 / 30);
       last = now;
+
+      frameMs += (raw - frameMs) * 0.05;
+      if (frameMs > 22 && budget > 1.5) budget = Math.max(1.5, budget - 0.25);
+      else if (frameMs < 14 && budget < 3) budget = Math.min(3, budget + 0.05);
       resize();
 
       const { tiltX, tiltY, shake, accelX, accelY } = motion.current;
-      const { offsetY: shiftY, glass: g, focus: focusTarget } = liveRef.current;
+      const { offsetY: shiftY, glass: g, focus: focusTarget, lifted, typed, slots } = liveRef.current;
       // Ease toward the target rather than snapping, so the regroup reads as
       // the orbs swimming into place instead of a cut.
       focusT += (focusTarget - focusT) * Math.min(1, dt * 4.5);
@@ -249,8 +293,16 @@ export function OrbCluster({ motion, className, offsetY = 0, glass, focus = 0 }:
           h.cx = orb.cx;
           h.cy = orb.cy;
           h.size = orb.size;
-          // the eight that aren't in the regrouped cluster step aside
+          // the ones not in the regrouped cluster step aside
           h.alpha = 1 - focusT;
+        }
+        const r = rank[i];
+        // An orb on its way up fades as it goes, so it leaves nothing behind
+        // — squared, so it stays solid for most of the travel and only thins
+        // out at the end. Orbs past this round's slots never appear at all.
+        if (r >= 0) {
+          h.alpha *= 1 - liftT[i] * liftT[i];
+          if (r >= liveRef.current.slots) h.alpha *= 1 - focusT;
         }
       }
 
@@ -266,8 +318,16 @@ export function OrbCluster({ motion, className, offsetY = 0, glass, focus = 0 }:
         const floatX = Math.sin(s.phase * orb.drift.fx + orb.drift.px) * orb.drift.ax * ampK;
         const floatY = Math.cos(s.phase * orb.drift.fy + orb.drift.py) * orb.drift.ay * ampK;
 
+        /* The count. Focusing the field lifts every orb; each digit lets the
+           next one back down. It rides the same spring as everything else, so
+           an orb arriving looks like an orb, not like a value changing. */
+        const r = rank[i];
+        const inRound = r >= 0 && r < slots;
+        const want = lifted && inRound && r >= typed ? 1 : 0;
+        liftT[i] += (want - liftT[i]) * Math.min(1, dt * 6);
+
         s.tx = floatX + tiltX * g.tiltTravel * depth * lead;
-        s.ty = floatY + tiltY * g.tiltTravel * depth * lead;
+        s.ty = floatY + tiltY * g.tiltTravel * depth * lead - liftT[i] * LIFT_PX;
 
         const mass = 1 + (orb.depth - 0.5) * T.massFromSize;
         s.fx = ((s.tx - s.x) * g.spring) / mass - s.vx * g.drag;

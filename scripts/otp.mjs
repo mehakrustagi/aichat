@@ -19,12 +19,14 @@ await page.waitForTimeout(700);
 for (const d of "12345") await page.getByRole("button", { name: d, exact: true }).first().click();
 await page.waitForTimeout(300);
 
-const clip = { x: 20, y: 380, width: 400, height: 170 };
+const clip = process.env.TIGHT
+  ? { x: 150, y: 400, width: 140, height: 130 }
+  : { x: 20, y: 380, width: 400, height: 170 };
 await page.screenshot({ path: ".scratch/otp-00.png", clip });
 
 const t0 = Date.now();
 await page.getByRole("button", { name: "6", exact: true }).first().click();
-const marks = [120, 260, 380, 500, 640, 820, 980, 1120, 1300, 1700];
+const marks = (process.env.MARKS ?? '120,260,380,500,640,820,980,1120,1300,1700').split(',').map(Number);
 for (const [n, at] of marks.entries()) {
   const wait = at - (Date.now() - t0);
   if (wait > 0) await page.waitForTimeout(wait);

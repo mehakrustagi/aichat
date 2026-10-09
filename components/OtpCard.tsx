@@ -22,20 +22,14 @@ export function OtpCard({
   children?: React.ReactNode;
 }) {
   if (state === "verified") {
+    /* A shine travelling the border, not an outline drawn on it. The Connect
+       treatment that was here read as a static ring the moment it sat still,
+       which is the one thing a "just completed" state must not do. */
     return (
-      <div className="relative h-full w-full rounded-[inherit] bg-emerald-500/15 p-px shadow-[0_8px_30px_-8px_rgba(16,185,129,0.6)]">
-        {/* the pool of light at the head */}
-        <span className="absolute inset-0 overflow-hidden rounded-[inherit]">
-          <span className="absolute inset-0 rounded-[inherit] bg-[image:radial-gradient(75%_100%_at_50%_0%,rgba(16,185,129,0.75)_0%,rgba(16,185,129,0)_75%)] bg-[length:200%_100%] motion-safe:animate-[connect-glow_2.4s_ease-in-out_infinite]" />
-        </span>
-
-        <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[inherit] bg-white ring-1 ring-emerald-500/25">
+      <div className="relative h-full w-full rounded-[inherit] bg-white shadow-[0_4px_28px_-1.92px_rgba(0,0,0,0.07)]">
+        <span className="otp-lining otp-lining--green" style={{ borderRadius: "inherit" }} />
+        <span className="relative z-10 flex h-full w-full items-center justify-center rounded-[inherit]">
           {children}
-        </div>
-
-        {/* and the hairline under the foot */}
-        <span className="absolute -bottom-px left-[14%] h-px w-[72%] overflow-hidden">
-          <span className="block h-full w-full bg-gradient-to-r from-emerald-400/0 via-emerald-400/90 to-emerald-400/0 motion-safe:animate-[connect-hairline_2.4s_ease-in-out_infinite]" />
         </span>
       </div>
     );
@@ -47,12 +41,16 @@ export function OtpCard({
         as="div"
         active
         duration={0.75}
-        sweepColor="#ffffff"
-        highlightColor="#e8edf5"
-        style={{ width: "100%", height: "100%", padding: 1.5, background: "#c6cdd9" }}
+        sweepColor="#f6f8fb"
+        highlightColor="#eef2f8"
+        // 1px of ring, and the inner panel inset by exactly the same, or the
+        // border comes out thicker on two sides than the other two. The base
+        // is light enough that the travelling spark reads as a sheen rather
+        // than as one edge being darker than the rest.
+        style={{ width: "100%", height: "100%", padding: 1, background: "#e2e6ed" }}
         containerClassName="rounded-[inherit]! gap-0! border-0! shadow-[0_4px_28px_-1.92px_rgba(0,0,0,0.07)]"
         className="flex! h-full! w-full! items-center! justify-center! rounded-[inherit]! bg-transparent! px-0! py-0! text-[#1a1a1a]!"
-        innerClassName="rounded-[inherit]! bg-white! inset-[1.5px]!"
+        innerClassName="rounded-[15px]! bg-white! inset-[1px]!"
       >
         {children}
       </HoverBorderGradient>

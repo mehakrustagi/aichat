@@ -1,18 +1,21 @@
 "use client";
 
-import Image from "next/image";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { OtpCard } from "@/components/OtpCard";
+import { RollingTitle } from "@/components/motion/RollingTitle";
+import { VerifiedTick } from "@/components/motion/VerifiedTick";
+import { SheetFootField } from "@/components/motion/SheetFootField";
+import { PAD_HEIGHT } from "@/components/NumberPad";
 import { sheetItem, sheetVariants } from "@/lib/sheetMotion";
 import { haptic } from "@/lib/haptics";
 import { FRAME_HEIGHT } from "@/lib/orbs";
 
 export const OTP_LENGTH = 6;
-export const SHEET_HEIGHT = 440;
-/** The sheet stops here so the number pad underneath stays reachable. */
-export const SHEET_BOTTOM = 648;
-const SHEET_TOP = SHEET_BOTTOM - SHEET_HEIGHT;
+/** The sheet runs to the foot of the screen and the number pad lives inside
+ *  it, so the two read as one surface rather than a card sitting on a slab. */
+export const SHEET_TOP = 208;
+export const SHEET_HEIGHT = FRAME_HEIGHT - SHEET_TOP;
 /** Closed, it has to clear the bottom of the frame entirely — anything less
  *  and it peeks up over the screen and eats taps meant for what's beneath. */
 const CLOSED_Y = FRAME_HEIGHT - SHEET_TOP;
@@ -39,7 +42,7 @@ const SEQUENCE: [Stage, number][] = [
   ["green", 60],
   ["gather", 220],
   ["settle", 960],
-  ["check", 1140],
+  ["check", 1080],
   ["verified", 1620],
 ];
 /** and then the sheet leaves */
@@ -65,8 +68,16 @@ const TOP_CARD = OTP_LENGTH - 1;
 const SKEW = [-3.6, 2.4, -1.5, 1.5, -2.4, 3.6];
 const NUDGE = [2, -1.5, 1, -1, 1.5, -2];
 
-/** the card the tick appears on, once the deck is one */
+/** The size the single card settles at, reached by scaling rather than by
+ *  resizing — see the card's transform. */
 const CHECK_SIZE = 66;
+/* 50x58 to 66x66 is not a uniform scale, and doing it with `transform` put a
+   16% horizontal stretch through everything inside: the tick came out wider
+   than it was tall, the corner radius went elliptical, and the 1px border
+   became 1.32px on the sides against 1.14px top and bottom. By the time this
+   runs the other five cards are unmounted, so growing the box itself is one
+   element's layout for 320ms — which buys back a tick that is the shape it
+   was drawn. */
 
 type Props = {
   code: string;
@@ -115,7 +126,7 @@ export function OtpSheet({ code, open, onDone }: Props) {
 
   return (
     <motion.div
-      className="absolute left-0 w-[440px] overflow-hidden rounded-[44px] bg-white shadow-[0_-8px_40px_-12px_rgba(0,0,0,0.12)]"
+      className="absolute left-0 w-[440px] overflow-hidden rounded-t-[44px] bg-white shadow-[0_-8px_40px_-12px_rgba(0,0,0,0.12)]"
       style={{ height: SHEET_HEIGHT, top: SHEET_TOP, transformPerspective: 1400 }}
       variants={sheetVariants}
       custom={CLOSED_Y}
@@ -130,16 +141,29 @@ export function OtpSheet({ code, open, onDone }: Props) {
 
       <motion.div
         variants={sheetItem}
-        className="absolute left-1/2 top-[71px] flex -translate-x-1/2 flex-col items-center gap-[12px] text-center"
+        className="absolute left-1/2 top-[71px] flex w-[300px] -translate-x-1/2 flex-col items-center gap-[12px] text-center"
       >
-        <p className="whitespace-nowrap text-[24px] font-medium leading-[28px] tracking-[-0.96px] text-[#1a1a1a]">
-          {stage === "verified" ? "Verified" : "Enter OTP"}
-        </p>
-        <p className="w-[214px] text-[16px] font-medium leading-[20px] tracking-[-0.64px] text-[#999]">
-          {stage === "verified"
-            ? "Taking you in"
-            : "We\u2019ve sent a 6 digit OTP on your number"}
-        </p>
+        {/* Turns over when the code resolves, rather than swapping. */}
+        <RollingTitle
+          title={stage === "verified" ? "Verified" : "Enter OTP"}
+          tone={stage === "verified" ? "success" : "ink"}
+          height={28}
+          align="center"
+          className="text-[24px] font-medium leading-[28px] tracking-[-0.96px]"
+        />
+        <div className="w-[214px]">
+          <RollingTitle
+            title={
+              stage === "verified"
+                ? "Taking you in"
+                : "We\u2019ve sent a 6 digit OTP on your number"
+            }
+            tone="grey"
+            height={40}
+            align="center"
+            className="text-[16px] font-medium leading-[20px] tracking-[-0.64px] whitespace-normal text-center"
+          />
+        </div>
       </motion.div>
 
       {/* --- the six, and the one they become ------------------------- */}
@@ -150,100 +174,93 @@ export function OtpSheet({ code, open, onDone }: Props) {
       >
         {Array.from({ length: OTP_LENGTH }).map((_, i) => {
           const isTop = i === TOP_CARD;
-          // Once the deck is one, every card expands together, so the stack
-          // stays a single shape rather than one card outgrowing the others.
-          const w = ticked ? CHECK_SIZE : BOX_W;
-          const h = ticked ? CHECK_SIZE : BOX_H;
+          // Hidden cards stop rendering entirely rather than sitting at zero
+          // opacity: each one runs a conic-gradient lining, and five of those
+          // still animating under the one you can see is what made the last
+          // beat stutter.
+          const gone = squared && !isTop;
           return (
             <div
               key={i}
               className="absolute"
               style={{
-                left: i * (BOX_W + GAP) + (BOX_W - w) / 2,
-                top: (BOX_H - h) / 2,
-                width: w,
-                height: h,
+                left: i * (BOX_W + GAP) + (BOX_W - (ticked ? CHECK_SIZE : BOX_W)) / 2,
+                top: (BOX_H - (ticked ? CHECK_SIZE : BOX_H)) / 2,
+                width: ticked ? CHECK_SIZE : BOX_W,
+                height: ticked ? CHECK_SIZE : BOX_H,
                 borderRadius: ticked ? 22 : 16,
                 zIndex: depth(i),
+                // The box never changes size. Growing it by width/height would
+                // put a layout pass in every frame of the one moment that has
+                // to be perfect; a non-uniform scale is composited instead.
                 transform: gathered
                   ? `translate(${travel(i)}px, ${squared ? 0 : NUDGE[i]}px) rotate(${
                       squared ? 0 : SKEW[i]
-                    }deg) scale(${stage === "check" ? 1 : 1})`
+                    }deg)`
                   : "none",
-                // Only the top card survives the squaring-up; the rest are
-                // already underneath it, so you never see them go.
-                opacity: squared && !isTop ? 0 : 1,
-                filter:
-                  squared && isTop
-                    ? ticked
-                      ? "drop-shadow(0 0 22px rgba(16,185,129,0.55)) drop-shadow(0 0 60px rgba(16,185,129,0.3))"
-                      : "drop-shadow(0 8px 26px rgba(16,185,129,0.45))"
-                    : "none",
+                opacity: gone ? 0 : 1,
                 transition: [
-                  `transform ${gathered && !squared ? glide(i) : 300}ms cubic-bezier(0.3,0.9,0.4,1)`,
-                  "opacity 200ms ease",
-                  "width 320ms cubic-bezier(0.22,1.2,0.36,1)",
-                  "height 320ms cubic-bezier(0.22,1.2,0.36,1)",
-                  "left 320ms cubic-bezier(0.22,1.2,0.36,1)",
-                  "top 320ms cubic-bezier(0.22,1.2,0.36,1)",
-                  "border-radius 320ms ease",
-                  "filter 380ms ease",
+                  gathered && !squared
+                    ? `transform ${glide(i)}ms cubic-bezier(0.3,0.9,0.4,1)`
+                    : "transform 360ms cubic-bezier(0.34,1.28,0.5,1)",
+                  "opacity 180ms ease",
+                  "width 320ms cubic-bezier(0.34,1.28,0.5,1)",
+                  "height 320ms cubic-bezier(0.34,1.28,0.5,1)",
+                  "left 320ms cubic-bezier(0.34,1.28,0.5,1)",
+                  "top 320ms cubic-bezier(0.34,1.28,0.5,1)",
+                  "border-radius 300ms ease",
                 ].join(", "),
               }}
             >
-              <OtpCard state={green ? "verified" : i < code.length ? "filled" : "empty"}>
-                {i < code.length && (
-                  <span
-                    className="text-[22px] font-medium tracking-[-0.4px] text-[#1a1a1a] transition-opacity duration-200"
-                    style={{ opacity: squared ? 0 : 1 }}
-                  >
-                    {code[i]}
-                  </span>
-                )}
-              </OtpCard>
+              {!gone && (
+                <OtpCard state={green ? "verified" : i < code.length ? "filled" : "empty"}>
+                  {i < code.length && (
+                    <span
+                      className="text-[22px] font-medium tracking-[-0.4px] text-[#1a1a1a] transition-opacity duration-200"
+                      style={{ opacity: squared ? 0 : 1 }}
+                    >
+                      {code[i]}
+                    </span>
+                  )}
+                </OtpCard>
+              )}
 
               {isTop && (
                 <>
-                  {/* the pulse that goes out as the tick lands */}
+                  {/* Both of these live on the card rather than on the row.
+                      Pinned to the row they sat at the card's FINAL geometry
+                      while it was still growing into it, so for the whole
+                      320ms the glow and the ring were offset from the thing
+                      they belong to. */}
                   <span
-                    className="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-[1.5px] border-[#10b981]"
+                    className="pointer-events-none absolute inset-0 rounded-[inherit] transition-opacity duration-[420ms]"
                     style={{
-                      opacity: ticked ? 0 : 0,
-                      animation: ticked ? "tick-pulse 620ms ease-out 180ms" : undefined,
+                      opacity: squared ? 1 : 0,
+                      boxShadow: ticked
+                        ? "0 0 26px 2px rgba(16,185,129,0.5), 0 0 70px 12px rgba(16,185,129,0.26)"
+                        : "0 10px 30px -4px rgba(16,185,129,0.45)",
                     }}
                   />
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    className="absolute left-1/2 top-1/2 z-20 h-[32px] w-[32px]"
-                    style={{
-                      transform: "translate(-50%, -50%)",
-                      opacity: ticked ? 1 : 0,
-                    }}
-                  >
-                    <path
-                      d="M5 12.6 10 17.6 19.4 7.4"
-                      stroke="#10b981"
-                      strokeWidth="2.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      pathLength={1}
+                  {ticked && (
+                    <span
+                      className="pointer-events-none absolute inset-0 rounded-[inherit] border-[1.5px] border-[#10b981]"
                       style={{
-                        strokeDasharray: 1,
-                        strokeDashoffset: ticked ? 0 : 1,
-                        // Drawn, not faded: a tick that writes itself reads as
-                        // something being confirmed rather than switched on.
-                        transition: ticked
-                          ? "stroke-dashoffset 420ms cubic-bezier(0.65,0,0.35,1) 140ms"
-                          : "none",
+                        opacity: 0,
+                        animation: "tick-pulse 640ms cubic-bezier(0.22,1,0.36,1) 180ms",
                       }}
                     />
-                  </svg>
+                  )}
+                  <VerifiedTick
+                    on={ticked}
+                    size={30}
+                    className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2"
+                  />
                 </>
               )}
             </div>
           );
         })}
+
       </motion.div>
 
       {/* --- resend / verified ---------------------------------------- */}
@@ -252,7 +269,7 @@ export function OtpSheet({ code, open, onDone }: Props) {
         className="absolute left-1/2 top-[292px] flex h-[44px] -translate-x-1/2 items-center gap-[6px]"
       >
         {stage === "verified" ? (
-          <p className="whitespace-nowrap text-[14px] font-semibold leading-[19px] tracking-[-0.14px] text-[#059669]">
+          <p className="whitespace-nowrap text-[18px] font-semibold leading-[24px] tracking-[-0.36px] text-[#059669]">
             Verified successfully
           </p>
         ) : (
@@ -273,15 +290,8 @@ export function OtpSheet({ code, open, onDone }: Props) {
         )}
       </motion.div>
 
-      {/* the perforated field the design puts at the foot of the sheet */}
-      <Image
-        src="/otp/union.svg"
-        alt=""
-        width={379}
-        height={214}
-        style={{ width: 379, height: 214 }}
-        className="pointer-events-none absolute left-[30px] top-[389px] max-w-none"
-      />
+      <SheetFootField bottom={PAD_HEIGHT} rows={4} />
+
     </motion.div>
   );
 }

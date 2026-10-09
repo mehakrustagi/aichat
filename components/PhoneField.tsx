@@ -51,10 +51,14 @@ export function PhoneField({ value, focused, onFocus }: Props) {
           className="flex min-w-0 flex-1 items-center justify-start text-left text-[14px] font-medium leading-[19px] tracking-[-0.28px]"
           aria-label="Phone number"
         >
+          {/* The placeholder gives way to the caret on focus, the way a real
+              input does — leaving it in put the caret after "Enter number",
+              which reads as text already typed. Figma's focused frame (1251)
+              shows the field empty for the same reason. */}
           {value ? (
             <span className="text-black">{value}</span>
           ) : (
-            <span className="text-[#7a7a7a]">Enter number</span>
+            !focused && <span className="text-[#7a7a7a]">Enter number</span>
           )}
           {focused && (
             <span className="ml-[1px] inline-block h-[17px] w-[1.5px] animate-[caret_1.1s_steps(1,end)_infinite] bg-black align-middle" />

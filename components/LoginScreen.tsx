@@ -29,7 +29,8 @@ const PHONE_LENGTH = 10;
 const FOCUS_LIFT = 76;
 
 export function LoginScreen() {
-  const { motion, needsPermission, request } = useDeviceMotion();
+  // Motion unlocks on the first tap anywhere — see useDeviceMotion.
+  const { motion } = useDeviceMotion();
   const [phase, setPhase] = useState<Phase>("idle");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -75,19 +76,12 @@ export function LoginScreen() {
         className="absolute left-0 top-0 z-0"
         offsetY={-lift}
         focus={focused ? 1 : 0}
+        lifted={focused}
+        typed={phase === "otp" ? code.length : phone.length}
+        slots={phase === "otp" ? OTP_LENGTH : PHONE_LENGTH}
       />
 
       <div className="relative z-10 h-full w-full">
-        {needsPermission && (
-          <button
-            type="button"
-            onClick={request}
-            className="absolute left-1/2 top-[316px] z-20 -translate-x-1/2 rounded-full border border-[#d6d9dc] bg-white/80 px-[14px] py-[7px] text-[11px] font-bold uppercase tracking-[0.88px] text-[#1a1a1a] backdrop-blur-sm"
-          >
-            Tap to let the orbs follow you
-          </button>
-        )}
-
         {/* Everything in the stack lifts together — the design moves each of
             these by the same 76px between frames 1255 and 1250. */}
         <div

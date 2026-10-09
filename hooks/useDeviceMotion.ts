@@ -24,12 +24,22 @@ type WithPermission = { requestPermission?: () => Promise<"granted" | "denied"> 
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** tilt (deg) that maps to a full-strength offset */
-const TILT_RANGE_DEG = 32;
+/** Tilt (deg) that maps to a full-strength offset. 35 to match the Motion
+ *  Library's comet-card — past that a phone is being waved, not tilted. */
+const TILT_RANGE_DEG = 31.5;
 /** phones are usually held tipped back; treat this beta as level */
 const NEUTRAL_BETA = 45;
-/** low-pass on tilt — lower is smoother and laggier */
-const TILT_SMOOTHING = 0.1;
+/** Time constant for the tilt low-pass, in seconds.
+ *
+ *  This used to be a flat per-frame lerp, which is a bug on a phone: the
+ *  same constant settles twice as fast at 120Hz as at 60Hz, and on a device
+ *  whose frame rate swings (which is every device under load) the response
+ *  changes with it. Expressed as a time constant and applied against dt, the
+ *  feel is the same whatever the display is doing. */
+const TILT_TAU = 0.075;
+/** Sensor noise floor, in the same -1..1 the tilt is expressed in. Below this
+ *  the reading is held, so a phone resting on a table does not shimmer. */
+const TILT_DEADZONE = 0.004;
 
 /** How fast the gravity estimate tracks. Low, so only the slow component
  *  (which IS gravity) is subtracted and real motion survives. */
@@ -81,7 +91,14 @@ export function useDeviceMotion() {
     setActive(supported && !needsGesture);
   }, []);
 
-  /** iOS 13+ requires this to be called from a user gesture. */
+  /**
+   * iOS 13+ only hands over the sensors from inside a user gesture.
+   *
+   * The Motion Library's comet-card waits for the first tap anywhere rather
+   * than putting a button on screen, which is the better trade: the screen
+   * stays as designed and the permission arrives the moment someone touches
+   * it — which on a sign-in screen they are about to do anyway.
+   */
   const request = useCallback(async () => {
     const orientation = DeviceOrientationEvent as unknown as WithPermission;
     const deviceMotion =
@@ -105,6 +122,17 @@ export function useDeviceMotion() {
       return false;
     }
   }, []);
+
+  // The gesture that unlocks iOS. One shot, anywhere on the page.
+  useEffect(() => {
+    if (permission !== "prompt") return;
+    const onGesture = () => {
+      void request();
+      window.removeEventListener("pointerdown", onGesture);
+    };
+    window.addEventListener("pointerdown", onGesture);
+    return () => window.removeEventListener("pointerdown", onGesture);
+  }, [permission, request]);
 
   // Sensors
   useEffect(() => {
@@ -205,8 +233,11 @@ export function useDeviceMotion() {
       last = now;
       const m = motion.current;
 
-      m.tiltX += (target.current.x - m.tiltX) * TILT_SMOOTHING;
-      m.tiltY += (target.current.y - m.tiltY) * TILT_SMOOTHING;
+      // Frame-rate independent: the fraction of the remaining gap closed in
+      // dt, rather than a fixed fraction per frame.
+      const ease = 1 - Math.exp(-dt / TILT_TAU);
+      if (Math.abs(target.current.x - m.tiltX) > TILT_DEADZONE) m.tiltX += (target.current.x - m.tiltX) * ease;
+      if (Math.abs(target.current.y - m.tiltY) > TILT_DEADZONE) m.tiltY += (target.current.y - m.tiltY) * ease;
 
       // Fast up, slower down: the orbs jump the moment you move the phone
       // and keep swimming for a beat after you stop.
@@ -230,6 +261,8 @@ export function useDeviceMotion() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  /** Kept for the benches, which want an explicit control. The screen itself
+   *  no longer shows one — the first tap does it. */
   const needsPermission = permission === "prompt" && !usingPointer;
 
   return { motion: motion as MotionRef, permission, needsPermission, request };
